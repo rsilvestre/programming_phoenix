@@ -1466,12 +1466,24 @@ require.register("web/static/js/app.js", function(exports, require, module) {
 
 require("phoenix_html");
 
-var _player = require("./player");
+var _socket = require("./socket");
 
-var _player2 = _interopRequireDefault(_player);
+var _socket2 = _interopRequireDefault(_socket);
+
+var _video = require("./video");
+
+var _video2 = _interopRequireDefault(_video);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+// Import local files
+//
+// Local files can be imported directly using relative
+// paths "./socket" or full ones "web/static/js/socket".
+
+var video = document.getElementById("video");
+
+//import Player from "./player"
 // Brunch automatically concatenates all files in your
 // watched paths. Those paths can be configured at
 // config.paths.watched in "brunch-config.js".
@@ -1485,20 +1497,14 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 //
 // If you no longer want to use a dependency, remember
 // to also remove its path from "config.paths.watched".
-var video = document.getElementById("video");
 
-// Import local files
-//
-// Local files can be imported directly using relative
-// paths "./socket" or full ones "web/static/js/socket".
+_video2.default.init(_socket2.default, document.getElementById("video"));
 
-// import socket from "./socket"
-
-if (video) {
-  _player2.default.init(video.id, video.getAttribute("data-player-id"), function () {
-    console.log("player ready!");
-  });
-}
+//if (video) {
+//  Player.init(video.id, video.getAttribute("data-player-id"), () => {
+//    console.log("player ready!")
+//  })
+//}
 });
 
 ;require.register("web/static/js/player.js", function(exports, require, module) {
@@ -1556,7 +1562,12 @@ Object.defineProperty(exports, "__esModule", {
 
 var _phoenix = require("phoenix");
 
-var socket = new _phoenix.Socket("/socket", { params: { token: window.userToken } });
+var socket = new _phoenix.Socket("/socket", {
+  params: { token: window.userToken },
+  logger: function logger(kind, msg, data) {
+    console.log(kind + ": " + msg, data);
+  }
+});
 
 // When you connect, you'll often need to authenticate the client.
 // For example, imagine you have an authentication plug, `MyAuth`,
@@ -1618,6 +1629,135 @@ channel.join().receive("ok", function (resp) {
 });
 
 exports.default = socket;
+});
+
+;require.register("web/static/js/video.js", function(exports, require, module) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _player = require("./player");
+
+var _player2 = _interopRequireDefault(_player);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
+var Video = {
+  init: function init(socket, element) {
+    var _this = this;
+
+    if (!element) {
+      return;
+    }
+    var playerId = element.getAttribute("data-player-id");
+    var videoId = element.getAttribute("data-id");
+    socket.connect();
+    _player2.default.init(element.id, playerId, function () {
+      _this.onReady(videoId, socket);
+    });
+  },
+  onReady: function onReady(videoId, socket) {
+    var _this2 = this;
+
+    var msgContainer = document.getElementById("msg-container");
+    var msgInput = document.getElementById("msg-input");
+    var postButton = document.getElementById("msg-submit");
+
+    var vidChannel = socket.channel("videos:" + videoId);
+
+    postButton.addEventListener("click", function (e) {
+      var payload = { body: msgInput.value, at: _player2.default.getCurrentTime() };
+      vidChannel.push("new_annotation", payload).receive("error", function (e) {
+        return console.log(e);
+      });
+      msgInput.value = "";
+    });
+
+    msgContainer.addEventListener("click", function (e) {
+      e.preventDefault();
+      var seconds = e.target.getAttribute("data-seek") || e.target.parentNode.getAttribute("data-seek");
+
+      if (!seconds) {
+        return;
+      }
+      _player2.default.seekTo(seconds);
+    });
+
+    vidChannel.on("new_annotation", function (resp) {
+      vidChannel.params.last_seen_id = resp.id;
+      _this2.renderAnnotation(msgContainer, resp);
+    });
+
+    vidChannel.join()
+    /*.receive("ok", ({annotations}) => {
+      annotations.forEach( ann => this.renderAnnotation(msgContainer, ann))
+    })*/
+    .receive("ok", function (resp) {
+      var ids = resp.annotations.map(function (ann) {
+        return ann.id;
+      });
+      if (ids.length > 0) {
+        vidChannel.params.last_seen_id = Math.max.apply(Math, _toConsumableArray(ids));
+      }
+      _this2.scheduleMessages(msgContainer, resp.annotations);
+    }).receive("error", function (reason) {
+      return console.log("join failed", reason);
+    });
+
+    vidChannel.on("ping", function (_ref) {
+      var count = _ref.count;
+      return console.log("PING", count);
+    });
+  },
+  esc: function esc(str) {
+    var div = document.createElement("div");
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  },
+  renderAnnotation: function renderAnnotation(msgContainer, _ref2) {
+    var user = _ref2.user,
+        body = _ref2.body,
+        at = _ref2.at;
+
+    var template = document.createElement("div");
+
+    template.innerHTML = "\n      <a href=\"#\" data-seek=\"" + this.esc(at) + "\">\n        [" + this.formatTime(at) + "]\n        <b>" + this.esc(user.username) + "</b>: " + this.esc(body) + "\n      </a>\n    ";
+
+    msgContainer.appendChild(template);
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+  },
+  scheduleMessages: function scheduleMessages(msgContainer, annotations) {
+    var _this3 = this;
+
+    setTimeout(function () {
+      var ctime = _player2.default.getCurrentTime();
+      var remaining = _this3.renderAtTime(annotations, ctime, msgContainer);
+      _this3.scheduleMessages(msgContainer, remaining);
+    }, 1000);
+  },
+  renderAtTime: function renderAtTime(annotations, seconds, msgContainer) {
+    var _this4 = this;
+
+    return annotations.filter(function (ann) {
+      if (ann.at > seconds) {
+        return true;
+      }
+      _this4.renderAnnotation(msgContainer, ann);
+      return false;
+    });
+  },
+  formatTime: function formatTime(at) {
+    var date = new Date(null);
+    date.setSeconds(at / 1000);
+    return date.toISOString().substr(14, 5);
+  }
+};
+
+exports.default = Video;
 });
 
 ;require.alias("phoenix_html/priv/static/phoenix_html.js", "phoenix_html");

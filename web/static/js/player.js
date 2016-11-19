@@ -1,4 +1,4 @@
-let Player = {
+const Player = {
   player: null,
   init(domId, playerId, onReady) {
     window.onYouTubeIframeAPIReady = () => {
