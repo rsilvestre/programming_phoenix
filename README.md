@@ -21,6 +21,7 @@ The application will allow us to take videos (hosted elsewhere) wnd attach comme
 To start your Phoenix app:
 
   * Install dependencies with `mix deps.get`
+  * Install Node modules with `npm install`
   * Create and migrate your database with `mix ecto.create && mix ecto.migrate`
   * Start Phoenix endpoint with `mix phoenix.server`
 
