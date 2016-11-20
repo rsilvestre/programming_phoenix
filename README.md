@@ -1,5 +1,19 @@
 # Rumbl
 
+This project is based on the book:
+
+Programming Phoenix: Productive |> Reliable |> Fast
+
+Chris McCord, Bruce Tate and José Valim
+
+edited by Jacquelyn Carter
+
+ISBN-10: 1680501453
+
+ISBN-13: 978-1680501452
+
+## Start
+
 To start your Phoenix app:
 
   * Install dependencies with `mix deps.get`
