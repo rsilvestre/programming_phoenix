@@ -12,6 +12,10 @@ ISBN-10: 1680501453
 
 ISBN-13: 978-1680501452
 
+```
+The application will allow us to take videos (hosted elsewhere) wnd attach comments to them in real time and play them back alongside the comments of other users. This application will be tremendously demanding because each user will record and play back comments that must be saved and served quickly so that the content stays relavant.
+```
+
 ## Start
 
 To start your Phoenix app:
